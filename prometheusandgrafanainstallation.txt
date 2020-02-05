@@ -1,0 +1,138 @@
+Install prometheus
+
+sudo yum update -y
+vi /etc/sysconfig/selinux
+make SELINUX=disable
+sudo reboot
+wget https://github.com/prometheus/prometheus/releases/download/v2.15.2/prometheus-2.15.2.linux-amd64.tar.gz
+tar xvf prometheus-2.15.2.linux-amd64.tar.gz
+sudo mkdir /etc/prometheus
+sudo mkdir /var/lib/prometheus
+sudo useradd --no-create-home --shell /bin/false prometheus
+sudo chown prometheus:prometheus /etc/prometheus/
+sudo chown prometheus:prometheus /var/lib/prometheus/
+cd prometheus-2.15.2.linux-amd64/
+sudo cp prometheus /usr/local/bin/
+sudo cp promtool /usr/local/bin/
+sudo chown prometheus:prometheus /usr/local/bin/prometheus
+sudo chown prometheus:prometheus /usr/local/bin/promtool
+sudo cp -r consoles/ console_libraries/ /etc/prometheus/
+sudo chown -R prometheus:prometheus /etc/prometheus/consoles
+sudo chown -R prometheus:prometheus /etc/prometheus/console_libraries/
+sudo vi /etc/prometheus/prometheus.yml (create these file and add below content)
+-------------------------------------------------------------------------------
+   global:
+  scrape_interval: 10s
+
+scrape_configs:
+  - job_name: 'prometheus_master'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:9090']
+---------------------------------------------------------------------------------
+sudo chown prometheus:prometheus prometheus.yml
+sudo vi /etc/systemd/system/prometheus.service (create fila and add below content in the prometheus.service file)
+--------------------------------------------------------
+[Unit]
+Description=Prometheus
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+Type=simple
+ExecStart=/usr/local/bin/prometheus \
+--config.file /etc/prometheus/prometheus.yml \
+--storage.tsdb.path /var/lib/prometheus/ \
+--web.console.templates=/etc/prometheus/consoles \
+--web.console.libraries=/etc/prometheus/console_libraries
+
+[Install]
+WantedBy=multi-user.target
+----------------------------------------------------------
+sudo systemctl daemon-reload
+sudo systemctl start prometheus
+sudo systemctl status prometheus
+sudo firewall-cmd --zone=public --add-port=9090/tcp --permanent
+sudo systemctl enable firewalld
+sudo systemctl reload firewalld
+
+Use the following Url to access UI
+http://<IP address>:9090
+Then You can access the prometheus dashboard 
+
+Then to monitor the Linux server we have to configure nodeport pluggin
+
+wget https://github.com/prometheus/node_exporter/releases/download/v0.17.0/node_exporter-0.17.0.linux-amd64.tar.gz
+
+sudo tar -xvzf node_exporter-0.17.0.linux-amd64.tar.gz
+sudo useradd -rs /bin/false nodeusr
+sudo mv node_exporter-0.17.0.linux-amd64/node_exporter /usr/local/bin/
+sudo vim /etc/systemd/system/node_exporter.service (create these file and add conent in these file)
+
+------------------------------------------------------------------------------------------
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=nodeusr
+Group=nodeusr
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+---------------------------------------------------------------------------------------------
+sudo systemctl daemon-reload
+sudo systemctl start node_exporter
+sudo firewall-cmd --zone=public --add-port=9100/tcp --permanent
+sudo systemctl restart firewalld
+sudo systemctl enable node_exporter
+
+http://IP-Address:9100/metrics
+sudo vi /etc/prometheus/prometheus.yml(open these file add below data to access metrice of nodeport using prometheus)
+---------------------------------------------------------------------
+- job_name: 'node_exporter_centos'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['hostname:9100']
+--------------------------------------------------------------------
+
+sudo systemctl restart prometheus
+sudo systemctl status prometehus
+http://Prometheus-Server-IP:9090/targets
+Go to target and select node-memory or any other metric and execute graph it willl display the graplical metrics
+------------------------END OF PROMETHEUS-----------------------------------------------------------------------
+------------------------START OF GRAFANA-----------------------------------------------------------------------
+
+sudo vi /etc/yum.repos.d/grafana.repo
+[grafana]
+name=grafana
+baseurl=https://packages.grafana.com/oss/rpm
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+sudo yum update -y
+sudo yum install -y grafana
+sudo systemctl start grafana-server
+sudo systemctl enable grafana-server
+sudo yum install fontconfig freetype* urw-fonts
+sudo firewall-cmd --zone=public --add-port=3000/tcp --permanent
+sudo firewall-cmd --reload
+ access The grafana dashboard using 
+http://localhost:3000
+Go to Configuration
+Add DataSource
+click on prometheus
+add url of prometheus (localhost:9090)
+click on test and save
+go to + and import and add port no as 11074
+
+
+
+
